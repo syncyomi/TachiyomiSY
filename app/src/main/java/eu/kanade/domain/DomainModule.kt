@@ -21,6 +21,7 @@ import eu.kanade.domain.source.interactor.ToggleIncognito
 import eu.kanade.domain.source.interactor.ToggleLanguage
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
+import eu.kanade.domain.sync.SyncPreferences
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
 import eu.kanade.domain.track.interactor.SyncChapterProgressWithTrack
@@ -113,7 +114,9 @@ class DomainModule : InjektModule {
         addFactory { RenameCategory(get()) }
         addFactory { ReorderCategory(get()) }
         addFactory { UpdateCategory(get()) }
-        addFactory { DeleteCategory(get(), get(), get()) }
+        addFactory {
+            DeleteCategory(get(), get(), get()) { uid -> get<SyncPreferences>().rememberDeletedCategory(uid) }
+        }
 
         addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get()) }
         addFactory { GetDuplicateLibraryManga(get()) }
