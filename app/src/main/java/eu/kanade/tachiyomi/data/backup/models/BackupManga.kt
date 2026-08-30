@@ -8,12 +8,13 @@ import tachiyomi.data.MemoColumnAdapter
 import tachiyomi.domain.manga.model.Manga
 
 @Suppress("DEPRECATION")
+// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 class BackupManga(
     // in 1.x some of these values have different names
-    @ProtoNumber(1) var source: Long,
+    @ProtoNumber(1) var source: Long = 0,
     // url is called key in 1.x
-    @ProtoNumber(2) var url: String,
+    @ProtoNumber(2) var url: String = "",
     @ProtoNumber(3) var title: String = "",
     @ProtoNumber(4) var artist: String? = null,
     @ProtoNumber(5) var author: String? = null,

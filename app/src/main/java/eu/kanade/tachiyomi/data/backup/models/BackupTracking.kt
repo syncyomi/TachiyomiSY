@@ -4,12 +4,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import tachiyomi.domain.track.model.Track
 
+// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 data class BackupTracking(
     // in 1.x some of these values have different types or names
-    @ProtoNumber(1) var syncId: Int,
+    @ProtoNumber(1) var syncId: Int = 0,
     // LibraryId is not null in 1.x
-    @ProtoNumber(2) var libraryId: Long,
+    @ProtoNumber(2) var libraryId: Long = 0,
     @Deprecated("Use mediaId instead", level = DeprecationLevel.WARNING)
     @ProtoNumber(3)
     var mediaIdInt: Int = 0,

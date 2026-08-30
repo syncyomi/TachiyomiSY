@@ -4,9 +4,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import tachiyomi.domain.category.model.Category
 
+// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 class BackupCategory(
-    @ProtoNumber(1) var name: String,
+    @ProtoNumber(1) var name: String = "",
     @ProtoNumber(2) var order: Long = 0,
     @ProtoNumber(3) var id: Long = 0,
     // @ProtoNumber(3) val updateInterval: Int = 0, 1.x value not used in 0.x

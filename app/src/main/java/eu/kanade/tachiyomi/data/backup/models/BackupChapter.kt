@@ -7,12 +7,13 @@ import mihon.core.common.extensions.JsonObjectEmptyBytes
 import tachiyomi.data.MemoColumnAdapter
 import tachiyomi.domain.chapter.model.Chapter
 
+// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 class BackupChapter(
     // in 1.x some of these values have different names
     // url is called key in 1.x
-    @ProtoNumber(1) var url: String,
-    @ProtoNumber(2) var name: String,
+    @ProtoNumber(1) var url: String = "",
+    @ProtoNumber(2) var name: String = "",
     @ProtoNumber(3) var scanlator: String? = null,
     @ProtoNumber(4) var read: Boolean = false,
     @ProtoNumber(5) var bookmark: Boolean = false,
