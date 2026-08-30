@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.data.backup.restore.RestoreOptions
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
 import eu.kanade.tachiyomi.data.sync.service.GoogleDriveSyncService
 import eu.kanade.tachiyomi.data.sync.service.SyncData
+import eu.kanade.tachiyomi.data.sync.service.SyncResult
 import eu.kanade.tachiyomi.data.sync.service.SyncYomiSyncService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -70,6 +71,9 @@ class SyncManager(
      * from the database using the BackupManager, then synchronizes the data with a sync service.
      */
     suspend fun syncData() {
+        // Epoch seconds. Everything modified before this instant is in this upload; the next delta starts here.
+        val syncStart = System.currentTimeMillis() / 1000
+
         // Reset isSyncing in case it was left over or failed syncing during restore.
         database.transaction {
             database.mangasQueries.resetIsSyncing()
@@ -98,28 +102,6 @@ class SyncManager(
             // SY <--
         )
 
-        logcat(LogPriority.DEBUG) { "Begin create backup" }
-        val backupManga = backupCreator.backupMangas(databaseManga, backupOptions)
-        val backup = Backup(
-            backupManga = backupManga,
-            backupCategories = backupCreator.backupCategories(backupOptions),
-            backupSources = backupCreator.backupSources(backupManga),
-            backupPreferences = backupCreator.backupAppPreferences(backupOptions),
-            backupSourcePreferences = backupCreator.backupSourcePreferences(backupOptions),
-            backupExtensionStores = backupCreator.backupExtensionStores(backupOptions),
-
-            // SY -->
-            backupSavedSearches = backupCreator.backupSavedSearches(backupOptions),
-            // SY <--
-        )
-        logcat(LogPriority.DEBUG) { "End create backup" }
-
-        // Create the SyncData object
-        val syncData = SyncData(
-            deviceId = syncPreferences.uniqueDeviceID(),
-            backup = backup,
-        )
-
         // Handle sync based on the selected service
         val syncService = when (val syncService = SyncService.fromInt(syncPreferences.syncService.get())) {
             SyncService.SYNCYOMI -> {
@@ -141,7 +123,40 @@ class SyncManager(
             }
         }
 
-        val remoteBackup = syncService?.doSync(syncData)
+        // Whether to upload the whole library or only what changed since the last successful sync (SyncYomi v2).
+        val full = try {
+            syncService?.needsFullSync() ?: true
+        } catch (e: Exception) {
+            logcat(LogPriority.ERROR, e) { "Failed to probe sync server" }
+            notifier.showSyncError(e.message)
+            return
+        }
+
+        logcat(LogPriority.DEBUG) { "Begin create backup (full=$full)" }
+        val backupManga = backupCreator.backupMangas(databaseManga, backupOptions)
+            .let { if (full) it else changedSince(it, syncPreferences.lastPushedAt.get()) }
+        val backup = Backup(
+            backupManga = backupManga,
+            backupCategories = backupCreator.backupCategories(backupOptions),
+            backupSources = backupCreator.backupSources(backupManga),
+            backupPreferences = backupCreator.backupAppPreferences(backupOptions),
+            backupSourcePreferences = backupCreator.backupSourcePreferences(backupOptions),
+            backupExtensionStores = backupCreator.backupExtensionStores(backupOptions),
+
+            // SY -->
+            backupSavedSearches = backupCreator.backupSavedSearches(backupOptions),
+            // SY <--
+        )
+        logcat(LogPriority.DEBUG) { "End create backup" }
+
+        // Create the SyncData object
+        val syncData = SyncData(
+            deviceId = syncPreferences.uniqueDeviceID(),
+            backup = backup,
+        )
+
+        val result: SyncResult = syncService?.doSync(syncData, full) ?: return
+        val remoteBackup = result.backup
 
         if (remoteBackup == null) {
             logcat(LogPriority.DEBUG) { "Skip restore due to network issues" }
@@ -149,26 +164,29 @@ class SyncManager(
             return
         }
 
-        if (remoteBackup === syncData.backup) {
+        if (remoteBackup === syncData.backup || (result.protocolV2 && !result.changed)) {
             // nothing changed
-            logcat(LogPriority.DEBUG) { "Skip restore due to remote was overwrite from local" }
-            syncPreferences.lastSyncTimestamp.set(Date().time)
-            notifier.showSyncSuccess("Sync completed successfully")
+            logcat(LogPriority.DEBUG) { "Skip restore, nothing new on the remote" }
+            finishWithSuccess(syncStart, "Sync completed successfully")
             return
         }
 
-        // Stop the sync early if the remote backup is null or empty
-        if (remoteBackup.backupManga.isEmpty() && remoteBackup.backupCategories.isEmpty() && remoteBackup.backupSources.isEmpty()) {
-            notifier.showSyncError("No data found on remote server.")
-            return
-        }
+        if (!result.protocolV2) {
+            // Stop the sync early if the remote backup is null or empty
+            if (remoteBackup.backupManga.isEmpty() &&
+                remoteBackup.backupCategories.isEmpty() &&
+                remoteBackup.backupSources.isEmpty()
+            ) {
+                notifier.showSyncError("No data found on remote server.")
+                return
+            }
 
-        // Check if it's first sync based on lastSyncTimestamp
-        if (syncPreferences.lastSyncTimestamp.get() == 0L && databaseManga.isNotEmpty()) {
-            // It's first sync no need to restore data. (just update remote data)
-            syncPreferences.lastSyncTimestamp.set(Date().time)
-            notifier.showSyncSuccess("Updated remote data successfully")
-            return
+            // Check if it's first sync based on lastSyncTimestamp
+            if (syncPreferences.lastSyncTimestamp.get() == 0L && databaseManga.isNotEmpty()) {
+                // It's first sync no need to restore data. (just update remote data)
+                finishWithSuccess(syncStart, "Updated remote data successfully")
+                return
+            }
         }
 
         val (filteredFavorites, nonFavorites) = filterFavoritesAndNonFavorites(remoteBackup)
@@ -177,7 +195,8 @@ class SyncManager(
         val newSyncData = backup.copy(
             backupManga = filteredFavorites,
             backupCategories = remoteBackup.backupCategories,
-            backupSources = remoteBackup.backupSources,
+            // a v2 delta only carries changed sources
+            backupSources = remoteBackup.backupSources.ifEmpty { backup.backupSources },
             backupPreferences = remoteBackup.backupPreferences,
             backupSourcePreferences = remoteBackup.backupSourcePreferences,
             backupExtensionStores = remoteBackup.backupExtensionStores,
@@ -200,8 +219,7 @@ class SyncManager(
             !hasExtensionRepoChanges && !hasSavedSearchChanges
         ) {
             // update the sync timestamp
-            syncPreferences.lastSyncTimestamp.set(Date().time)
-            notifier.showSyncSuccess("Sync completed successfully")
+            finishWithSuccess(syncStart, "Sync completed successfully")
             return
         }
 
@@ -218,6 +236,7 @@ class SyncManager(
                         database.categoriesQueries.delete(it.id)
                     }
                 }
+                categoriesToDelete.forEach { syncPreferences.rememberDeletedCategory(it.uid) }
             }
         }
 
@@ -242,9 +261,17 @@ class SyncManager(
 
             // update the sync timestamp
             syncPreferences.lastSyncTimestamp.set(Date().time)
+            syncPreferences.lastPushedAt.set(syncStart)
         } else {
             logcat(LogPriority.ERROR) { "Failed to write sync data to file" }
         }
+    }
+
+    private fun finishWithSuccess(syncStart: Long, message: String) {
+        syncPreferences.lastSyncTimestamp.set(Date().time)
+        // everything modified before this instant reached the server; the next delta starts here
+        syncPreferences.lastPushedAt.set(syncStart)
+        notifier.showSyncSuccess(message)
     }
 
     private fun writeSyncDataToCache(context: Context, backup: Backup): Uri? {
