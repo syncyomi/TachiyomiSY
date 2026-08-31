@@ -243,7 +243,10 @@ class SyncManager(
         val backupUri = writeSyncDataToCache(context, newSyncData)
         logcat(LogPriority.DEBUG) { "Got Backup Uri: $backupUri" }
         if (backupUri != null) {
-            BackupRestoreJob.start(
+            // SY -->
+            // Await the apply so a failed restore fails the sync instead of
+            // silently reporting success with nothing written.
+            val applied = BackupRestoreJob.startAndAwaitSuccess(
                 context,
                 backupUri,
                 sync = true,
@@ -258,10 +261,18 @@ class SyncManager(
                     // SY <--
                 ),
             )
-
-            // update the sync timestamp
-            syncPreferences.lastSyncTimestamp.set(Date().time)
-            syncPreferences.lastPushedAt.set(syncStart)
+            if (applied) {
+                // update the sync timestamp
+                syncPreferences.lastSyncTimestamp.set(Date().time)
+                syncPreferences.lastPushedAt.set(syncStart)
+            } else {
+                // The cursor already advanced past the data that failed to apply, so
+                // ask the server for everything on the next run to self-heal.
+                syncPreferences.fullSyncRequested.set(true)
+                notifier.showSyncError("Failed to apply synced data; will retry with a full sync")
+                logcat(LogPriority.ERROR) { "Sync restore failed; requesting full sync on next run" }
+            }
+            // SY <--
         } else {
             logcat(LogPriority.ERROR) { "Failed to write sync data to file" }
         }
