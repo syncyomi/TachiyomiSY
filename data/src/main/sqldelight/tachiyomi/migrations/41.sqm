@@ -1,0 +1,21 @@
+-- Chapters are versioned and merged separately in sync protocol v2; bumping the manga version per
+-- chapter read let the device that read more chapters win all manga-level merges.
+DROP TRIGGER IF EXISTS update_chapter_and_manga_version;
+CREATE TRIGGER update_chapter_and_manga_version AFTER UPDATE ON chapters
+WHEN new.is_syncing = 0 AND (
+    new.read != old.read OR
+    new.bookmark != old.bookmark OR
+    new.last_page_read != old.last_page_read
+)
+BEGIN
+    UPDATE chapters SET version = version + 1
+    WHERE _id = new._id;
+END;
+
+-- removing a manga from a category is a manga-level change and must bump its version
+CREATE TRIGGER IF NOT EXISTS delete_manga_category_update_version AFTER DELETE ON mangas_categories
+BEGIN
+    UPDATE mangas
+    SET version = version + 1
+    WHERE _id = old.manga_id AND (SELECT is_syncing FROM mangas WHERE _id = old.manga_id) = 0;
+END;
