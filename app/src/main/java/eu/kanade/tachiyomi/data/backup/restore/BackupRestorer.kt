@@ -19,6 +19,7 @@ import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import exh.source.MERGED_SOURCE_ID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -120,9 +121,16 @@ class BackupRestorer(
         }
 
         coroutineScope {
-            if (options.categories) {
+            // SY -->
+            // Manga restore resolves categories by name, so it must not race the
+            // category restore — a delta carrying a new category and a manga in it
+            // would silently skip the assignment.
+            val categoriesJob = if (options.categories) {
                 restoreCategories(backup.backupCategories)
+            } else {
+                null
             }
+            // SY <--
             // SY -->
             if (options.savedSearches) {
                 restoreSavedSearches(backup.backupSavedSearches)
@@ -135,7 +143,13 @@ class BackupRestorer(
                 restoreSourcePreferences(backup.backupSourcePreferences)
             }
             if (options.libraryEntries) {
-                restoreManga(backup.backupManga, if (options.categories) backup.backupCategories else emptyList())
+                restoreManga(
+                    backup.backupManga,
+                    if (options.categories) backup.backupCategories else emptyList(),
+                    // SY -->
+                    categoriesJob,
+                    // SY <--
+                )
             }
             if (options.extensionStores) {
                 restoreExtensionStores(backup.backupExtensionStores)
@@ -176,7 +190,13 @@ class BackupRestorer(
     private fun CoroutineScope.restoreManga(
         backupMangas: List<BackupManga>,
         backupCategories: List<BackupCategory>,
+        // SY -->
+        categoriesJob: Job? = null,
+        // SY <--
     ) = launch {
+        // SY -->
+        categoriesJob?.join()
+        // SY <--
         mangaRestorer.sortByNew(backupMangas)
             /* SY --> */.sortedBy { it.source == MERGED_SOURCE_ID } /* SY <-- */
             .chunked(100)
