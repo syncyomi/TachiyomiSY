@@ -28,8 +28,10 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.util.concurrent.TimeUnit
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class SyncYomiSyncService(
     context: Context,
@@ -43,7 +45,7 @@ class SyncYomiSyncService(
     private class SyncYomiException(message: String?) : Exception(message)
 
     private companion object {
-        const val TIMEOUT_SECONDS = 30L
+        val TIMEOUT = 30.seconds
         val FULL_SYNC_INTERVAL = 24.hours
     }
 
@@ -166,7 +168,7 @@ class SyncYomiSyncService(
         // Only drop the uids we actually sent; a category deleted during the request stays pending.
         syncPreferences.pendingDeletedCategoryUids.set(syncPreferences.pendingDeletedCategoryUids.get() - pendingDeleted)
         if (full) {
-            syncPreferences.lastFullSync.set(System.currentTimeMillis())
+            syncPreferences.lastFullSync.set(Clock.System.now().toEpochMilliseconds())
         }
         logcat(LogPriority.DEBUG) { "SyncYomi v2 merge done: cursor=$cursor changed=$changed fullRequested=$fullRequested" }
 
@@ -181,7 +183,7 @@ class SyncYomiSyncService(
         if (!supportsV2()) return true
         if (syncPreferences.syncCursor.get() == 0L || syncPreferences.fullSyncRequested.get()) return true
         val lastFull = syncPreferences.lastFullSync.get()
-        return lastFull == 0L || System.currentTimeMillis() - lastFull > FULL_SYNC_INTERVAL.inWholeMilliseconds
+        return lastFull == 0L || Clock.System.now() - Instant.fromEpochMilliseconds(lastFull) > FULL_SYNC_INTERVAL
     }
 
     /**
@@ -217,9 +219,9 @@ class SyncYomiSyncService(
         .add("X-Device-Name", Build.MODEL)
 
     private fun syncClient(): OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .connectTimeout(TIMEOUT)
+        .readTimeout(TIMEOUT)
+        .writeTimeout(TIMEOUT)
         .build()
 
     private suspend fun pullSyncData(): Pair<SyncData?, String> {

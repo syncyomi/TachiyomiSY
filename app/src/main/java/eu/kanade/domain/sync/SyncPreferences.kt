@@ -15,7 +15,7 @@ class SyncPreferences(
 
     val lastSyncEtag: Preference<String> = preferenceStore.getString("sync_etag", "")
 
-    // SyncYomi protocol v2 state. App-state keys: never backed up or restored onto another device.
+    // SyncYomi protocol v2 state
     val syncCursor: Preference<Long> = preferenceStore.getLong(Preference.appStateKey("sync_cursor"), 0L)
 
     /** Epoch seconds of the start of the last successful sync; the next delta starts here. */

@@ -32,6 +32,7 @@ import java.io.File
 import java.io.IOException
 import java.util.Date
 import kotlin.system.measureTimeMillis
+import kotlin.time.Clock
 
 /**
  * A manager to handle synchronization tasks in the app, such as updating
@@ -72,7 +73,7 @@ class SyncManager(
      */
     suspend fun syncData() {
         // Epoch seconds. Everything modified before this instant is in this upload; the next delta starts here.
-        val syncStart = System.currentTimeMillis() / 1000
+        val syncStart = Clock.System.now().epochSeconds
 
         // Reset isSyncing in case it was left over or failed syncing during restore.
         database.transaction {
