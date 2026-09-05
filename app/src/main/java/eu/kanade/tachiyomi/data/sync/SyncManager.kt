@@ -244,7 +244,6 @@ class SyncManager(
         val backupUri = writeSyncDataToCache(context, newSyncData)
         logcat(LogPriority.DEBUG) { "Got Backup Uri: $backupUri" }
         if (backupUri != null) {
-            // SY -->
             // Await the apply so a failed restore fails the sync instead of
             // silently reporting success with nothing written.
             val applied = BackupRestoreJob.startAndAwaitSuccess(
@@ -273,7 +272,6 @@ class SyncManager(
                 notifier.showSyncError("Failed to apply synced data; will retry with a full sync")
                 logcat(LogPriority.ERROR) { "Sync restore failed; requesting full sync on next run" }
             }
-            // SY <--
         } else {
             logcat(LogPriority.ERROR) { "Failed to write sync data to file" }
         }

@@ -6,7 +6,6 @@ import kotlinx.serialization.protobuf.ProtoNumber
 /*
 * SY saved searches class
  */
-// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 data class BackupSavedSearch(
     @ProtoNumber(1) val name: String = "",

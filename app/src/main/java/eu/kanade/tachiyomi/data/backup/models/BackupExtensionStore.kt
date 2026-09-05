@@ -4,9 +4,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 import mihon.domain.extension.model.ExtensionStore
 
-// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 class BackupExtensionStore(
+    // SY -->
     @ProtoNumber(1) var indexUrl: String = "",
     @ProtoNumber(2) var name: String = "",
     @ProtoNumber(3) var badgeLabel: String? = null,
@@ -15,6 +15,7 @@ class BackupExtensionStore(
     @ProtoNumber(6) var contactDiscord: String? = null,
     @ProtoNumber(7) var isLegacy: Boolean? = null,
     @ProtoNumber(8) var extensionListUrl: String? = null,
+    // SY <--
 )
 
 val backupExtensionStoreMapper = { store: ExtensionStore ->

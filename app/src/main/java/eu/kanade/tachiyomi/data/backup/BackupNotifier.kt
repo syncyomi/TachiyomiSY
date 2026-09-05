@@ -87,7 +87,8 @@ class BackupNotifier(private val context: Context) {
         }
     }
 
-    @Synchronized
+    // SY -->
+    @Synchronized // SY <--
     fun showRestoreProgress(
         content: String = "",
         progress: Int = 0,

@@ -7,7 +7,6 @@ import tachiyomi.domain.manga.model.MergedMangaReference
 /*
 * SY merged manga backup class
  */
-// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 data class BackupMergedMangaReference(
     @ProtoNumber(1) var isInfoManga: Boolean = false,

@@ -4,7 +4,6 @@ import exh.metadata.sql.models.SearchMetadata
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 
-// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 data class BackupSearchMetadata(
     @ProtoNumber(1) var uploader: String? = null,

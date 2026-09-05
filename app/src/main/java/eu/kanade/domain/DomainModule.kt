@@ -114,9 +114,11 @@ class DomainModule : InjektModule {
         addFactory { RenameCategory(get()) }
         addFactory { ReorderCategory(get()) }
         addFactory { UpdateCategory(get()) }
+        // SY -->
         addFactory {
             DeleteCategory(get(), get(), get(), get<SyncPreferences>()::rememberDeletedCategory)
         }
+        // SY <--
 
         addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get()) }
         addFactory { GetDuplicateLibraryManga(get()) }

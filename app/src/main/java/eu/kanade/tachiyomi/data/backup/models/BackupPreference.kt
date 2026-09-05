@@ -3,22 +3,26 @@ package eu.kanade.tachiyomi.data.backup.models
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 
-// SY --> zero-value defaults: a proto3 encoder (SyncYomi v2 server) omits zero scalars, see BackupProto3DecodeTest // SY <--
 @Serializable
 data class BackupPreference(
+    // SY -->
     @ProtoNumber(1) val key: String = "",
+    // SY <--
     @ProtoNumber(2) val value: PreferenceValue,
 )
 
 @Serializable
 data class BackupSourcePreferences(
+    // SY -->
     @ProtoNumber(1) val sourceKey: String = "",
     @ProtoNumber(2) val prefs: List<BackupPreference> = emptyList(),
+    // SY <--
 )
 
 @Serializable
 sealed class PreferenceValue
 
+// SY -->
 @Serializable
 data class IntPreferenceValue(val value: Int = 0) : PreferenceValue()
 
@@ -36,3 +40,4 @@ data class BooleanPreferenceValue(val value: Boolean = false) : PreferenceValue(
 
 @Serializable
 data class StringSetPreferenceValue(val value: Set<String> = emptySet()) : PreferenceValue()
+// SY <--

@@ -130,8 +130,6 @@ class BackupRestorer(
             } else {
                 null
             }
-            // SY <--
-            // SY -->
             if (options.savedSearches) {
                 restoreSavedSearches(backup.backupSavedSearches)
             }
