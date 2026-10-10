@@ -30,3 +30,15 @@ internal fun extensionStoresDiffer(local: List<BackupExtensionStore>, remote: Li
 
 private fun BackupExtensionStore.syncIdentity() =
     listOf(indexUrl, name, badgeLabel, signingKey, contactWebsite, contactDiscord, isLegacy, extensionListUrl)
+
+// SY -->
+
+/**
+ * The SyncYomi v2 chapter tombstone key for a chapter: `<source id>|<manga url>` + `0x1f` +
+ * `<chapter url>`. It matches the key the server stores, so the client can name the exact chapter
+ * it deleted in `POST /api/sync/v2/deletions`. That body is JSON, so the separator is escaped
+ * there rather than needing base64 to survive a request header.
+ */
+internal fun chapterTombstoneKey(sourceId: Long, mangaUrl: String, chapterUrl: String): String =
+    "$sourceId|$mangaUrl\u001f$chapterUrl"
+// SY <--

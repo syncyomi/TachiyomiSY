@@ -36,6 +36,14 @@ class SyncPreferences(
         Preference.appStateKey("sync_pending_deleted_category_uids"),
         emptySet(),
     )
+    // SY -->
+
+    /** Chapter tombstone keys (see [eu.kanade.tachiyomi.data.sync.chapterTombstoneKey]) awaiting upload. */
+    val pendingDeletedChapterKeys: Preference<Set<String>> = preferenceStore.getStringSet(
+        Preference.appStateKey("sync_pending_deleted_chapter_keys"),
+        emptySet(),
+    )
+    // SY <--
 
     val syncInterval: Preference<Int> = preferenceStore.getInt("sync_interval", 0)
     val syncService: Preference<Int> = preferenceStore.getInt("sync_service", 0)
@@ -74,6 +82,18 @@ class SyncPreferences(
         if (uid == 0L || !isSyncEnabled()) return
         pendingDeletedCategoryUids.set(pendingDeletedCategoryUids.get() + uid.toString())
     }
+
+    // SY -->
+
+    /**
+     * Remembers a deleted chapter, as its sync tombstone key, so the next SyncYomi v2 request can
+     * send it. The server then drops the chapter everywhere instead of handing it back as a ghost.
+     */
+    fun rememberDeletedChapter(key: String) {
+        if (key.isEmpty() || !isSyncEnabled()) return
+        pendingDeletedChapterKeys.set(pendingDeletedChapterKeys.get() + key)
+    }
+    // SY <--
 
     fun getSyncSettings(): SyncSettings {
         return SyncSettings(

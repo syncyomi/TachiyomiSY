@@ -4,6 +4,9 @@ import eu.kanade.tachiyomi.data.backup.models.Backup
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -76,5 +79,34 @@ class SyncDeltaTest {
 
         val empty = ProtoBuf.decodeFromByteArray(Backup.serializer(), ByteArray(0))
         assertTrue(empty.backupManga.isEmpty())
+    }
+
+    // The chapter tombstone key must match the key the SyncYomi server stores, or the server
+    // tombstones nothing. It is `<source id>|<manga url>` + 0x1f + `<chapter url>`, and it travels
+    // as a raw string in the /v2/deletions JSON body, so the separator must survive that encoding.
+    @Test
+    fun `chapter tombstone key matches the server key and survives the JSON body`() {
+        val key = chapterTombstoneKey(
+            sourceId = 9999999999,
+            mangaUrl = "/e2e/E2E Alpha/01",
+            chapterUrl = "/e2e/E2E Alpha/01/ch01",
+        )
+
+        assertEquals(
+            "9999999999|/e2e/E2E Alpha/01\u001f/e2e/E2E Alpha/01/ch01",
+            key,
+        )
+
+        // characters that need escaping in real urls must come back byte-for-byte
+        val oddKey = chapterTombstoneKey(
+            sourceId = 7,
+            mangaUrl = "/manga/t\"a\u0001",
+            chapterUrl = "/c/x\n\t—",
+        )
+        val serializer = ListSerializer(String.serializer())
+        assertEquals(
+            listOf(oddKey),
+            Json.decodeFromString(serializer, Json.encodeToString(serializer, listOf(oddKey))),
+        )
     }
 }
