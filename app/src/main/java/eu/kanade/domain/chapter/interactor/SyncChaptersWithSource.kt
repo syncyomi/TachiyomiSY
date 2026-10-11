@@ -232,15 +232,12 @@ class SyncChaptersWithSource(
         }
         // <-- EXH
 
+        // SY -->
+        val tombstoneKey = { chapter: Chapter -> chapterTombstoneKey(manga.source, manga.url, chapter.url) }
+        // SY <--
         if (removedChapters.isNotEmpty()) {
             // SY -->
-            // Remember the chapters the source dropped so the next SyncYomi v2 sync tombstones them
-            // instead of letting the server hand them back as ghost chapters.
-            removedChapters.forEach { chapter ->
-                syncPreferences.rememberDeletedChapter(
-                    chapterTombstoneKey(manga.source, manga.url, chapter.url),
-                )
-            }
+            syncPreferences.rememberDeletedChapters(removedChapters.map(tombstoneKey))
             // SY <--
             val toDeleteIds = removedChapters.map { it.id }
             chapterRepository.removeChaptersWithIds(toDeleteIds)
@@ -248,6 +245,9 @@ class SyncChaptersWithSource(
 
         if (updatedToAdd.isNotEmpty()) {
             updatedToAdd = chapterRepository.addAll(updatedToAdd)
+            // SY -->
+            syncPreferences.forgetDeletedChapters(updatedToAdd.map(tombstoneKey))
+            // SY <--
         }
 
         if (updatedChapters.isNotEmpty()) {
