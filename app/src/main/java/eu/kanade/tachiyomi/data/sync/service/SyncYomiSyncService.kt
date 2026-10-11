@@ -68,12 +68,8 @@ class SyncYomiSyncService(
         SYNC_CANCELLED,
     }
 
-    // SY -->
-
-    /** Body of `POST /api/sync/v2/deletions`. */
     @Serializable
     private data class DeletedChapters(val deletedChapters: List<String> = emptyList())
-    // SY <--
 
     override suspend fun doSync(syncData: SyncData, full: Boolean): SyncResult {
         reportSyncEvent(SyncEventStatus.SYNC_STARTED)
@@ -143,12 +139,7 @@ class SyncYomiSyncService(
         val host = syncPreferences.clientHost.get()
         val apiKey = syncPreferences.clientAPIKey.get()
 
-        // SY -->
-        // Chapter deletions are reported to their own endpoint just before the merge, so deletions
-        // never need to fit in a request header; a failure there leaves the keys pending for the
-        // next sync.
         submitDeletedChapters(host, apiKey)
-        // SY <--
 
         val pendingDeleted = syncPreferences.pendingDeletedCategoryUids.get()
         val headersBuilder = baseHeaders(apiKey)
@@ -382,24 +373,15 @@ class SyncYomiSyncService(
         }
     }
 
-    // SY -->
-
-    /**
-     * Reports the pending chapter tombstones to `POST /api/sync/v2/deletions`, just before the
-     * merge, so its response already lacks the chapters that were tombstoned. The submission is
-     * one transaction on the server, so a 2xx clears exactly the keys that were sent; any other
-     * outcome (an older server answers 404) keeps them pending and they are retried on the next
-     * sync until the server is upgraded.
-     */
     private suspend fun submitDeletedChapters(host: String, apiKey: String) {
-        val pending = syncPreferences.pendingDeletedChapterKeys.get()
-        if (pending.isEmpty()) return
+        val sent = syncPreferences.pendingDeletedChapterKeys.get()
+        if (sent.isEmpty()) return
 
         val request = POST(
             url = "$host/api/sync/v2/deletions",
             headers = baseHeaders(apiKey).build(),
             body = json
-                .encodeToString(DeletedChapters.serializer(), DeletedChapters(pending.toList()))
+                .encodeToString(DeletedChapters.serializer(), DeletedChapters(sent.toList()))
                 .toRequestBody("application/json; charset=utf-8".toMediaType()),
         )
 
@@ -417,11 +399,7 @@ class SyncYomiSyncService(
                 return
             }
         }
-        // Only drop the keys we actually sent; a chapter deleted during the request stays pending.
-        syncPreferences.pendingDeletedChapterKeys.set(
-            syncPreferences.pendingDeletedChapterKeys.get() - pending,
-        )
-        logcat(LogPriority.DEBUG) { "SyncYomi v2 deletions applied: ${pending.size} keys" }
+        syncPreferences.forgetDeletedChapters(sent)
+        logcat(LogPriority.DEBUG) { "SyncYomi v2 deletions applied: ${sent.size} keys" }
     }
-    // SY <--
 }
