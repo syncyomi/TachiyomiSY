@@ -81,9 +81,6 @@ class SyncDeltaTest {
         assertTrue(empty.backupManga.isEmpty())
     }
 
-    // The chapter tombstone key must match the key the SyncYomi server stores, or the server
-    // tombstones nothing. It is `<source id>|<manga url>` + 0x1f + `<chapter url>`, and it travels
-    // as a raw string in the /v2/deletions JSON body, so the separator must survive that encoding.
     @Test
     fun `chapter tombstone key matches the server key and survives the JSON body`() {
         val key = chapterTombstoneKey(
@@ -97,7 +94,6 @@ class SyncDeltaTest {
             key,
         )
 
-        // characters that need escaping in real urls must come back byte-for-byte
         val oddKey = chapterTombstoneKey(
             sourceId = 7,
             mangaUrl = "/manga/t\"a\u0001",
