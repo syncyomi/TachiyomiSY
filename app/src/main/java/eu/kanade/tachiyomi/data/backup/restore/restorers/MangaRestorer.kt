@@ -89,6 +89,8 @@ class MangaRestorer(
             // SY -->
             manga = EXHMigrations.migrateBackupEntry(manga)
             // SY <--
+            val isStrictlyNewer = dbManga == null || manga.version > dbManga.version ||
+                (manga.version == dbManga.version && manga.lastModifiedAt > dbManga.lastModifiedAt)
             val restoredManga = if (dbManga == null) {
                 restoreNewManga(manga)
             } else {
@@ -100,6 +102,7 @@ class MangaRestorer(
                 chapters = backupManga.chapters,
                 categories = backupManga.categories,
                 backupCategories = backupCategories,
+                isStrictlyNewer = isStrictlyNewer,
                 history = backupManga.history,
                 tracks = backupManga.tracking,
                 excludedScanlators = backupManga.excludedScanlators,
@@ -344,6 +347,7 @@ class MangaRestorer(
         chapters: List<BackupChapter>,
         categories: List<Long>,
         backupCategories: List<BackupCategory>,
+        isStrictlyNewer: Boolean,
         history: List<BackupHistory>,
         tracks: List<BackupTracking>,
         excludedScanlators: List<String>,
@@ -353,7 +357,7 @@ class MangaRestorer(
         customManga: CustomMangaInfo?,
         // SY <--
     ): Manga {
-        restoreCategories(manga, categories, backupCategories)
+        restoreCategories(manga, categories, backupCategories, isStrictlyNewer)
         restoreChapters(manga, chapters)
         restoreTracking(manga, tracks)
         restoreHistory(manga, history)
@@ -378,18 +382,42 @@ class MangaRestorer(
         manga: Manga,
         categories: List<Long>,
         backupCategories: List<BackupCategory>,
+        isStrictlyNewer: Boolean,
     ) {
         val dbCategories = getCategories.await()
         val dbCategoriesByName = dbCategories.associateBy { it.name }
+        val dbCategoriesByNormalizedName = dbCategories.associateBy { it.name.trim().lowercase() }
+        val dbCategoriesByUid = dbCategories.associateBy { it.uid }
 
         val backupCategoriesByOrder = backupCategories.associateBy { it.order }
+        val backupCategoriesByUid = backupCategories.filter { it.uid != 0L }.associateBy { it.uid }
 
-        val mangaCategoriesToUpdate = categories.mapNotNull { backupCategoryOrder ->
-            backupCategoriesByOrder[backupCategoryOrder]?.let { backupCategory ->
-                dbCategoriesByName[backupCategory.name]?.let { dbCategory ->
-                    Pair(manga.id, dbCategory.id)
+        val mangaCategoriesToUpdate = categories.mapNotNull { categoryRef ->
+            val byOrder = backupCategoriesByOrder[categoryRef]
+            if (byOrder != null) {
+                val dbCat = dbCategoriesByName[byOrder.name]
+                    ?: dbCategoriesByNormalizedName[byOrder.name.trim().lowercase()]
+                    ?: (if (byOrder.uid != 0L) dbCategoriesByUid[byOrder.uid] else null)
+                if (dbCat != null) return@mapNotNull Pair(manga.id, dbCat.id)
+            }
+            if (categoryRef != 0L) {
+                val dbCatByUid = dbCategoriesByUid[categoryRef]
+                if (dbCatByUid != null) return@mapNotNull Pair(manga.id, dbCatByUid.id)
+                val backupCatByUid = backupCategoriesByUid[categoryRef]
+                if (backupCatByUid != null) {
+                    val dbCat = dbCategoriesByName[backupCatByUid.name]
+                        ?: dbCategoriesByNormalizedName[backupCatByUid.name.trim().lowercase()]
+                    if (dbCat != null) return@mapNotNull Pair(manga.id, dbCat.id)
                 }
             }
+            val index = categoryRef.toInt()
+            if (index in backupCategories.indices) {
+                val backupCat = backupCategories[index]
+                val dbCat = dbCategoriesByName[backupCat.name]
+                    ?: dbCategoriesByNormalizedName[backupCat.name.trim().lowercase()]
+                if (dbCat != null) return@mapNotNull Pair(manga.id, dbCat.id)
+            }
+            null
         }
 
         if (mangaCategoriesToUpdate.isNotEmpty()) {
@@ -398,6 +426,10 @@ class MangaRestorer(
                 mangaCategoriesToUpdate.forEach { (mangaId, categoryId) ->
                     database.mangas_categoriesQueries.insert(mangaId, categoryId)
                 }
+            }
+        } else if (isSync && isStrictlyNewer && categories.isEmpty() && backupCategories.isNotEmpty()) {
+            database.transaction {
+                database.mangas_categoriesQueries.deleteMangaCategoryByMangaId(manga.id)
             }
         }
     }

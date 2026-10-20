@@ -4,6 +4,7 @@ import app.cash.sqldelight.async.coroutines.awaitAsOne
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import tachiyomi.data.Database
 import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -42,17 +43,24 @@ class CategoriesRestorer(
                     }
 
                     if (dbCategory != null) {
+                        val uid = if (backupCategory.uid != 0L) {
+                            backupCategory.uid
+                        } else if (dbCategory.uid != 0L) {
+                            dbCategory.uid
+                        } else {
+                            Category.nameToUid(backupCategory.name)
+                        }
                         database.categoriesQueries.update(
                             name = backupCategory.name,
                             order = backupCategory.order,
                             flags = backupCategory.flags,
                             version = backupCategory.version,
-                            uid = if (backupCategory.uid != 0L) backupCategory.uid else dbCategory.uid,
+                            uid = uid,
                             last_modified_at = backupCategory.lastModifiedAt,
                             isSyncing = 1,
                             categoryId = dbCategory.id,
                         )
-                        return@map dbCategory
+                        return@map dbCategory.copy(uid = uid, order = backupCategory.order)
                     }
 
                     // SY -->
@@ -61,15 +69,16 @@ class CategoriesRestorer(
                     // reorders never converge across devices.
                     val order = if (isSync) backupCategory.order else nextOrder++
                     // SY <--
+                    val uid = if (backupCategory.uid != 0L) backupCategory.uid else Category.nameToUid(backupCategory.name)
                     database.categoriesQueries.insert(
                         backupCategory.name,
                         order,
                         backupCategory.flags,
                         backupCategory.version,
-                        backupCategory.uid,
+                        uid,
                         backupCategory.lastModifiedAt,
                     ).awaitAsOne()
-                        .let { id -> backupCategory.toCategory(id).copy(order = order) }
+                        .let { id -> backupCategory.toCategory(id).copy(order = order, uid = uid) }
                 }
             // SY <--
 
