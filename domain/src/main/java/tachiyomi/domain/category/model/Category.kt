@@ -16,5 +16,15 @@ data class Category(
 
     companion object {
         const val UNCATEGORIZED_ID = 0L
+
+        fun nameToUid(name: String): Long {
+            val normalized = name.trim().lowercase()
+            var h = 1125899906842597L
+            for (c in normalized) {
+                h = 31L * h + c.code
+            }
+            val positive = h and Long.MAX_VALUE
+            return if (positive == 0L) 1L else positive
+        }
     }
 }
